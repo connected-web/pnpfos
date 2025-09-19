@@ -56,14 +56,15 @@ jobs:
       working-directory: template
       
     # Get OAuth token for accessing OpenAPI spec
-    - name: Get OAuth token
+    - name: Get OAuth Token
       id: get-oauth-token
       env:
         OAUTH_IDENTITY_URL: ${{ vars.OAUTH_IDENTITY_URL }}
         OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
         OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
       run: |
-        basic_auth=$(echo -n "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" | base64)
+        # ensure base64 output is one line (Linux: -w 0, macOS: tr -d '\n')
+        basic_auth=$(echo -n "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" | base64 -w 0 2>/dev/null || echo -n "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" | base64 | tr -d '\n')
         response=$(curl -s -X POST "$OAUTH_IDENTITY_URL" \
           -H 'Content-Type: application/x-www-form-urlencoded' \
           -H "Authorization: Basic $basic_auth" \
