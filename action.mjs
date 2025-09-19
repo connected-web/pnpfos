@@ -78,7 +78,7 @@ class Logger {
     console.error(this.prefix, ...args)
   }
 }
-const logger = new Logger('publish-npm-package-from-openapi-spec')
+const logger = new Logger('pnpfos-action')
 
 function readWithDefault (value, defaultValue) {
   const emptyOrUndefined = value === undefined || String(value).trim().length === 0

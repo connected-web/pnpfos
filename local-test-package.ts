@@ -1,4 +1,4 @@
-import ApiClient, { ApiClientType } from './@connected-web/publish-npm-package-from-openapi-spec-ci-pipeline-test'
+import ApiClient, { ApiClientType } from './@connected-web/pnpfos-ci-pipeline-test'
 
 async function getAccessToken(): Promise<string> {
   return String(process.env.ACCESS_TOKEN)

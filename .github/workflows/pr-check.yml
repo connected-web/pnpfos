@@ -81,17 +81,22 @@ jobs:
       id: version
       run: |
         if [ -n "${{ github.event.pull_request }}" ]; then
-          echo "Using 0.0.0-gitref as the version for a PR"
+          echo "Using PR ref for version"
           echo "version=0.0.0-${{ github.head_ref }}-${{ github.sha }}" >> $GITHUB_OUTPUT
         elif [ "${{ github.event.release.prerelease }}" == "true" ]; then
-          echo "Using the tag name for prerelease"
+          echo "Using prerelease tag for version"
           echo "version=${{ github.event.release.tag_name }}-RC${{ github.run_number }}" >> $GITHUB_OUTPUT
-        else
-          echo "Using the tag name for release"
+        elif [ -n "${{ github.event.release.tag_name }}" ]; then
+          echo "Using release tag for version"
           echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+        elif [ "${{ github.ref_name }}" == "main" ]; then
+          echo "Using dev version for main branch"
+          echo "version=0.0.0-main-${{ github.run_number }}" >> $GITHUB_OUTPUT
+        else
+          echo "Fallback version for other branches"
+          echo "version=0.0.0-${{ github.ref_name }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
-
 
     # Test action from branch using local OpenAPI spec
     - name: Publish npm package (from local OpenAPI spec)
