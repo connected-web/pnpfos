@@ -1,0 +1,46 @@
+{
+  "name": "@connected-web/template-package",
+  "version": "0.0.0",
+  "description": "@connected-web/template-package - generated API client for interacting with the Connected Web API programmatically",
+  "main": "dist/src/PackageIndex.js",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npx tsc",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "mocha --require ts-node/register tests/**/*.test.ts",
+    "lint": "ts-standard",
+    "lint:fix": "ts-standard --fix",
+    "typegen": "typegen src/client/OpenAPISpec.json > src/client/ApiClientTypes.d.ts",
+    "check-for-updates": "npx npm-check-updates -u --reject chai,@types/chai && npm install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/connected-web/template-package.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "keywords": [],
+  "author": "connected-web",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/connected-web/template-package/issues"
+  },
+  "homepage": "https://github.com/connected-web/template-package#readme",
+  "dependencies": {
+    "openapi-client-axios": "^7.5.5"
+  },
+  "devDependencies": {
+    "@types/chai": "4.3.8",
+    "@types/mocha": "^10.0.10",
+    "chai": "4.3.8",
+    "mocha": "^11.0.1",
+    "openapi-client-axios-typegen": "^7.7.0",
+    "ts-node": "^10.9.2",
+    "ts-standard": "^12.0.2"
+  }
+}
