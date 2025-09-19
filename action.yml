@@ -1,0 +1,62 @@
+name: Publish NPM Package from OpenAPI Spec
+description: 'Use an OpenAPI spec to generate and publish an npm package to the GitHub Package Registry'
+inputs:
+  bearer-token:
+    description: 'OAuth bearer token to use for authenticating with OpenAPI endpoints'
+  github-token:
+    description: 'GitHub token used to publish the package to the registry'
+  package-id:
+    description: 'ID of the package to publish - should explicitly include @connected-web/ prefix otherwise the action will exit early'
+  openapi-spec-file:
+    description: 'Path to the OpenAPI spec file to use for generating the package'
+  openapi-spec-url:
+    description: 'URL to the OpenAPI spec file to use for generating the package - uses an OAuth token based on client-id and client-secret to fetch the spec'
+  version:
+    description: 'Version of the package to publish - should be a valid semver version. For branches other than main, this should be a pre-release version'
+  preview-mode:
+    description: 'Whether to hold off on publishing the package to the registry. If true, the package will be built and tested but not published to the registry'
+    default: 'false'
+  source-repo-id:
+    description: 'The repository to use as the source for the action - used to search and replace values in the template'
+    default: 'connected-web/pnpfos'
+
+outputs:
+  package-id:
+    description: 'String containing the ID of the package that was published'
+    value: ${{ steps.publish-npm-package.outputs.package-id }}
+  published-version:
+    description: 'String containing the actual version of the package that was published (after invalid semver characters were removed)'
+    value: ${{ steps.publish-npm-package.outputs.published-version }}
+
+runs:
+  using: composite
+  steps:
+    # Checkout the repo
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # needed to checkout all branches for this Action to work
+
+    # Set up node
+    - name: Use Node JS LTS
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        registry-url: https://npm.pkg.github.com
+        scope: '@connected-web'
+
+    # Run the action
+    - name: Publish NPM Package
+      id: publish-npm-package
+      shell: bash
+      run: |
+        node $GITHUB_ACTION_PATH/action.mjs
+        cat ${{ inputs.package-id }}/package.json
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.github-token }}
+        ACCESS_TOKEN: ${{ steps.get-auth.outputs.auth-token }}
+        PACKAGE_ID: ${{ inputs.package-id }}
+        OPENAPI_SPEC_FILE: ${{ inputs.openapi-spec-file }}
+        OPENAPI_SPEC_URL: ${{ inputs.openapi-spec-url }}
+        VERSION: ${{ inputs.version }}
+        PREVIEW_MODE: ${{ inputs.preview-mode }}
+        SOURCE_REPO_ID: ${{ inputs.source-repo-id }}
