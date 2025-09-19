@@ -258,6 +258,8 @@ async function run () {
     openapiSpec = await readOpenAPISpecFromUrl(openapiSpecUrl, standardAuthHeaders)
     if (openapiSpec) {
       logger.info('OpenAPI spec downloaded:', openapiSpec?.length + ' bytes')
+      // 👇 add this
+      logger.info('OpenAPI spec (first 500 chars):\n' + openapiSpec.slice(0, 500))
     } else {
       logger.error('Unable to download OpenAPI spec from URL - exiting early')
       process.exit(1)
