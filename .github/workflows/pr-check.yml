@@ -1,0 +1,130 @@
+name: Check PR
+on: 
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - 'template/**'
+      - 'stubs/**'
+      - action.yml
+      - action.mjs
+  release:
+    types:
+      - released
+      - prereleased
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    name: Test Publish NPM Package Action
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Use Node JS LTS
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+        registry-url: https://npm.pkg.github.com
+        scope: '@connected-web'
+
+    - name: Use dependency cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          **/node_modules
+        key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-npm-
+      
+    # Install dependencies
+    - name: Install dependencies
+      if: steps.npm-cache.outputs.cache-hit != 'true'
+      run: npm ci
+      working-directory: template
+
+    # Check that the basic template works before manipulating it
+    - name: Test basic template 
+      run: npm run test
+      working-directory: template
+      
+    # Get OAuth token for accessing OpenAPI spec
+    - name: Get OAuth token
+      id: get-oauth-token
+      env:
+        OAUTH_IDENTITY_URL: ${{ vars.OAUTH_IDENTITY_URL }}
+        OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+        OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+      run: |
+        response=$(curl -s -X POST "$OAUTH_IDENTITY_URL" \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          -d "grant_type=client_credentials&client_id=$OAUTH_CLIENT_ID&client_secret=$OAUTH_CLIENT_SECRET&scope=api.read")
+        echo "Response: $response"
+        token=$(echo $response | jq -r '.access_token')
+        if [ "$token" == "null" ] || [ -z "$token" ]; then
+          echo "Failed to get access token"
+          exit 1
+        fi
+        echo "Token: $token"
+        echo "token=$token" >> $GITHUB_OUTPUT
+      shell: bash
+
+    # Test example instruction from README
+    - name: Determine version
+      id: version
+      run: |
+        if [ -n "${{ github.event.pull_request }}" ]; then
+          echo "Using 0.0.0-gitref as the version for a PR"
+          echo "version=0.0.0-${{ github.head_ref }}-${{ github.sha }}" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.release.prerelease }}" == "true" ]; then
+          echo "Using the tag name for prerelease"
+          echo "version=${{ github.event.release.tag_name }}-RC${{ github.run_number }}" >> $GITHUB_OUTPUT
+        else
+          echo "Using the tag name for release"
+          echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+        fi
+      shell: bash
+
+
+    # Test action from branch using local OpenAPI spec
+    - name: Publish npm package (from local OpenAPI spec)
+      id: publish-npm-package-from-file
+      uses: ./
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        bearer-token: ${{ steps.get-oauth-token.outputs.token }}
+        package-id: '@connected-web/pnpfos-ci-pipeline-test'
+        openapi-spec-file: 'stubs/SampleOpenAPISpec.json'
+        version: ${{ steps.version.outputs.version }}
+        preview-mode: false
+    
+    # Test action from branch using hosted OpenAPI spec
+    - name: Publish npm package (from URL)
+      id: publish-npm-package-from-url
+      uses: ./
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        bearer-token: ${{ steps.get-oauth-token.outputs.token }}
+        package-id: '@connected-web/pnpfos-ci-pipeline-test-from-url'
+        openapi-spec-url: 'https://chasm-api.dev.connected-web.services/openapi'
+        version: ${{ steps.version.outputs.version }}
+        preview-mode: false
+
+    # Test outputs from the action
+    - name: Check outputs
+      run: |
+        echo "---"
+        echo "Package ID from file: ${{ steps.publish-npm-package-from-file.outputs.package-id }}"
+        echo "Published version from file: ${{ steps.publish-npm-package-from-file.outputs.published-version }}"
+        echo "---"
+        echo "Package ID from URL: ${{ steps.publish-npm-package-from-url.outputs.package-id }}"
+        echo "Published version from URL: ${{ steps.publish-npm-package-from-url.outputs.published-version }}"
+        echo "---"
+      shell: bash
