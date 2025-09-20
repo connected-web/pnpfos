@@ -96,7 +96,7 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         client-id: ${{ secrets.OAUTH_CLIENT_ID }}
         client-secret: ${{ secrets.OAUTH_CLIENT_SECRET }}
-        oauth-token-endpoint: ${{ secrets.OAUTH_IDENTITY_URL }}
+        oauth-token-endpoint: ${{ vars.OAUTH_IDENTITY_URL }}
         package-id: '@connected-web/pnpfos-ci-pipeline-test-from-url'
         openapi-spec-url: 'https://chasm-api.dev.connected-web.services/openapi'
         version: ${{ steps.version.outputs.version }}
