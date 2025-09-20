@@ -6,9 +6,10 @@ export OPENAPI_SPEC_URL="https://chasm-api.dev.connected-web.services/openapi"
 export VERSION="0.0.0-local-sh-test"
 export PREVIEW_MODE="true"
 
-export OAUTH_CLIENT_ID=""
-export OAUTH_CLIENT_SECRET=""
-export OAUTH_TOKEN_ENDPOINT="https://connected-web-dev.auth.eu-west-2.amazoncognito.com/oauth2/token"
+# Set by GitHub Actions as part of pr-check.yml workflow
+#export OAUTH_CLIENT_ID=""
+#export OAUTH_CLIENT_SECRET=""
+#export OAUTH_TOKEN_ENDPOINT="https://connected-web-dev.auth.eu-west-2.amazoncognito.com/oauth2/token"
 
 rm -rf @connected-web
 
