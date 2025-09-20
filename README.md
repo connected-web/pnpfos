@@ -43,17 +43,17 @@ The action should support the following inputs:
 
 ### client-id
 
-- **Description**: OAuth client ID used to fetch the OpenAPI spec from a URL
+- **Description**: OAuth client ID used to generate an API access token
 - **Required**: Yes if using openapi-spec-url
 
 ### client-secret
 
-- **Description**: OAuth client secret used to fetch the OpenAPI spec from a URL
+- **Description**: OAuth client secret used to generate an API access token
 - **Required**: Yes if using openapi-spec-url
 
 ### oauth-token-endpoint
 
-- **Description**: OAuth token endpoint used to fetch an access token for fetching the OpenAPI spec from a URL
+- **Description**: OAuth token endpoint used to generate an API access token
 - **Required**: Yes if using openapi-spec-url
 
 ### package-id
