@@ -2,7 +2,7 @@ import ApiClientPackage from './@connected-web/pnpfos-ci-pipeline-test/dist/src/
 const ApiClient = ApiClientPackage?.default || ApiClientPackage
 
 async function getAccessToken() {
-  return process.env.ACCESS_TOKEN  
+  return process.env.API_ACCESS_TOKEN  
 }
 
 // Substitute the URL with the actual API URL

@@ -21,7 +21,7 @@ Then you can install the package using `npm install @connected-web/template-pack
 import ApiClient from '@connected-web/template-package'
 
 async function getAccessToken() {
-  return process.env.ACCESS_TOKEN  
+  return process.env.API_ACCESS_TOKEN  
 }
 
 // Substitute the URL with the actual API URL
@@ -59,7 +59,7 @@ Secure API response: { status: 'ok' } 200 API version: 1.0.0 Package ID: @connec
 To locate your own access token, visit the [API Explorer](https://connected-web.github.io/api-explorer/) and authenticate via the "Login" button. Once authenticated, you can copy your access token from the User Details page.
 
 ```bash
-export ACCESS_TOKEN=<paste-your-token-here>
+export API_ACCESS_TOKEN=<paste-your-token-here>
 ```
 
 ### Github Actions

@@ -7,7 +7,11 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname)
 function writeGithubOutput (name, value) {
   const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT
   const output = `${name}<<::WGHO::\n${value}\n::WGHO::\n`
-  fs.appendFileSync(GITHUB_OUTPUT, output)
+  if (GITHUB_OUTPUT) {
+    fs.appendFileSync(GITHUB_OUTPUT, output)
+  } else {
+    console.log(`[local-output] ${name} = ${value}`)
+  }
 }
 
 const cwd = process.cwd()
@@ -19,6 +23,10 @@ function relativePath (file, cwd) {
 }
 
 export async function getOAuthToken () {
+  if (process.env.API_ACCESS_TOKEN) {
+    return process.env.API_ACCESS_TOKEN
+  }
+  
   try {
     const clientId = process.env.OAUTH_CLIENT_ID ?? 'not-set'
     const clientSecret = process.env.OAUTH_CLIENT_SECRET ?? 'not-set'
@@ -27,44 +35,40 @@ export async function getOAuthToken () {
       console.error('OAuth environment variables not set - exiting early')
       process.exit(1)
     }
-    // Make a POST request to the OAuth token endpoint with client credentials
+
     const requestPayload = [
       'grant_type=client_credentials',
       `client_id=${clientId}`
     ].join('&')
+
     const requestHeaders = {
       accept: 'application/json',
       'content-type': 'application/x-www-form-urlencoded',
-      authorization: `Basic ${btoa([clientId, clientSecret].join(':'))}`
+      authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
     }
-    const tokenResponse = await axios.post(oauthTokenEndpoint, requestPayload, { headers: requestHeaders })
-    return tokenResponse?.data?.access_token ?? 'not-set'
+
+    const response = await fetch(oauthTokenEndpoint, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: requestPayload
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch token: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data?.access_token ?? 'not-set'
   } catch (err) {
     console.error('Error fetching OAuth token:', err?.message)
     return 'not-set'
   }
 }
 
-// Spawn a child process
-// Directly log its output
-// Return a promise that resolves when the process exits
-// Timeout after 1 minute
-
 const SIXTY_SECOND_TIMEOUT = 60 * 1000
 const FIVE_MINUTE_TIMEOUT = 10 * 60 * 1000
 
-/**
- * Run a command in a child process
- * 
- * - Logs stdout and stderr to the console
- * - Rejects the promise if the process exits with a non-zero code
- * - Resolves the promise if the process exits with a zero code
- * - Rejects the promise if the process takes longer than 60 seconds
- * 
- * @param {*} command 
- * @returns  A promise that resolves when the process exits
- */
-async function runCommand(command, timeout=SIXTY_SECOND_TIMEOUT, cwd=process.cwd()) {
+async function runCommand (command, timeout = SIXTY_SECOND_TIMEOUT, cwd = process.cwd()) {
   return new Promise((resolve, reject) => {
     let timeoutId = 0
     const child = child_process.spawn(command, { shell: true, cwd })
@@ -73,10 +77,8 @@ async function runCommand(command, timeout=SIXTY_SECOND_TIMEOUT, cwd=process.cwd
     child.on('exit', code => {
       clearTimeout(timeoutId)
       if (code === 0) {
-        // console.log('Command completed successfully', { command, code })
         resolve()
       } else {
-        // console.error(`Command failed with code ${code}`, { command, code })
         reject(new Error(`Command failed with code ${code} for: ${command}`))
       }
     })
@@ -92,7 +94,7 @@ class Logger {
   constructor (name) {
     this.name = name
   }
-  get prefix() {
+  get prefix () {
     return `[${this.name}]`
   }
   log (...args) {
@@ -113,26 +115,35 @@ function readWithDefault (value, defaultValue) {
 }
 
 function sanitizeVersion (version) {
-  // replace / from branch names with -
   return version.replace(/\//g, '-')
 }
 
-async function readParamsFromEnv(env) {
-  const { PACKAGE_ID, OPENAPI_SPEC_FILE, OPENAPI_SPEC_URL, VERSION, PREVIEW_MODE, SOURCE_REPO_ID } = env
-  let accessToken
-  if (OPENAPI_SPEC_URL && OPENAPI_SPEC_URL !== 'no-openapi-spec-url') {
-    accessToken = await getOAuthToken()
+async function resolveAccessToken (openapiSpecUrl) {
+  if (openapiSpecUrl && openapiSpecUrl !== 'no-openapi-spec-url') {
+    logger.info('🔐 Fetching OAuth token for accessing OpenAPI spec URL')
+    return getOAuthToken()
   }
+  return null
+}
+
+async function readParamsFromEnv (env) {
+  const packageId = readWithDefault(env.PACKAGE_ID, 'no-package-id')
+  const openapiSpecFile = readWithDefault(env.OPENAPI_SPEC_FILE, 'no-openapi-spec-file')
+  const openapiSpecUrl = readWithDefault(env.OPENAPI_SPEC_URL, 'no-openapi-spec-url')
+  const version = sanitizeVersion(readWithDefault(env.VERSION, 'no-version'))
+  const previewMode = readWithDefault(env.PREVIEW_MODE, 'false').toLowerCase() === 'true'
+  const sourceRepoId = readWithDefault(env.SOURCE_REPO_ID, 'no-source-repo-id')
+
+  const accessToken = await resolveAccessToken(openapiSpecUrl)
+
   return {
-    packageId: readWithDefault(PACKAGE_ID, 'no-package-id'),
-    openapiSpecFile: readWithDefault(OPENAPI_SPEC_FILE, 'no-openapi-spec-file'),
-    openapiSpecUrl: readWithDefault(OPENAPI_SPEC_URL, 'no-openapi-spec-url'),
-    version: sanitizeVersion(readWithDefault(VERSION , 'no-version')),
-    previewMode: readWithDefault(PREVIEW_MODE, 'false').toLowerCase() === 'true',
-    standardAuthHeaders: {
-      Authorization: `Bearer ${accessToken}`
-    },
-    sourceRepoId: readWithDefault(SOURCE_REPO_ID, 'no-source-repo-id')
+    packageId,
+    openapiSpecFile,
+    openapiSpecUrl,
+    version,
+    previewMode,
+    sourceRepoId,
+    standardAuthHeaders: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
   }
 }
 
@@ -147,10 +158,11 @@ function readOpenAPISpecFromFile (file) {
 
 async function readOpenAPISpecFromUrl (url, standardAuthHeaders) {
   try {
-    return fetch(url, {
-      method: 'GET',
-      headers: standardAuthHeaders,
-    }).then(res => res.text())
+    const res = await fetch(url, { method: 'GET', headers: standardAuthHeaders })
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText}`)
+    }
+    return res.text()
   } catch (err) {
     logger.error('Error reading OpenAPI spec URL:', err.message)
     return false
@@ -169,11 +181,10 @@ function validateOpenAPISpec (spec) {
 
 const validPackageIdRegex = /^@connected-web\/[a-z0-9-]+$/
 function validatePackageId (packageId) {
-  // Should always begin with @connected-web/ and contain only lowercase letters, numbers, and hyphens
   return validPackageIdRegex.test(packageId)
 }
 
-async function searchAndReplaceInFiles(dirPath, search, replace) {
+async function searchAndReplaceInFiles (dirPath, search, replace) {
   const files = fs.readdirSync(dirPath)
   for (const file of files) {
     const filePath = path.join(dirPath, file)
@@ -188,7 +199,7 @@ async function searchAndReplaceInFiles(dirPath, search, replace) {
   }
 }
 
-async function listFilesRelativeToDir (dirPath, ignoreNodeModules=true, level=0, originalDirPath=dirPath) {
+async function listFilesRelativeToDir (dirPath, ignoreNodeModules = true, level = 0, originalDirPath = dirPath) {
   const files = fs.readdirSync(dirPath)
   if (level === 0) {
     console.log('Contents of:', dirPath)
@@ -208,58 +219,41 @@ async function listFilesRelativeToDir (dirPath, ignoreNodeModules=true, level=0,
   }
 }
 
-
-// Create a markdown table containing METHOD, PATH, MethodName, and Description from OpenAPI spec
-function generateMarkDownForOpenAPISpec(openApiSpec, sourceRepoId) {
+function generateMarkDownForOpenAPISpec (openApiSpec, sourceRepoId) {
   const markdown = []
-
-  // Add info about the source repo
   markdown.push(`For more information about this API please visit the [${sourceRepoId}](https://github.com/${sourceRepoId}) repository.`)
   markdown.push('')
-
-  // Feature request: Instead of a table use headings and code blocks for each endpoint
-
-  // Add headings
   markdown.push('| METHOD | PATH | Operation | Parameters |')
   markdown.push('|--------|------|-----------|------------|')
 
-  // Ignore options, head, and trace methods
   const optionsToIgnore = ['options', 'head', 'trace']
-
   const spec = JSON.parse(openApiSpec)
   const paths = spec.paths
+
   for (const path in paths) {
     const methods = paths[path]
     for (const method in methods) {
-      const { operationId, parameters } = methods[method]
-      // Make summary out of parameters
-      const summary = parameters?.map(param => {
-        return param.required ? `**${param.name}**` : `*${param.name}*`
-      }).join(', ')
       if (optionsToIgnore.includes(method.toLowerCase())) {
         continue
       }
+      const { operationId, parameters } = methods[method]
+      const summary = parameters?.map(param =>
+        param.required ? `**${param.name}**` : `*${param.name}*`
+      ).join(', ')
       markdown.push(`| ${String(method).toUpperCase()} | ${path} | ${operationId} | ${String(summary ?? '-')} |`)
     }
   }
 
   markdown.push('')
-  markdown.push(`**Required parameter** / *Optional parameter*`)
+  markdown.push('**Required parameter** / *Optional parameter*')
   markdown.push('')
-
   return markdown.join('\n')
 }
 
 const timeStart = Date.now()
 async function run () {
-  const { accessToken, packageId, openapiSpecFile, openapiSpecUrl, version, previewMode, standardAuthHeaders, sourceRepoId } = await readParamsFromEnv(process.env)
-  logger.log('Running action... with properties:', {
-    accessToken: accessToken?.length + ' bytes',
-    packageId,
-    openapiSpecFile,
-    openapiSpecUrl,
-    version
-  })
+  const { packageId, openapiSpecFile, openapiSpecUrl, version, previewMode, standardAuthHeaders, sourceRepoId } = await readParamsFromEnv(process.env)
+  logger.log('Running action... with properties:', { packageId, openapiSpecFile, openapiSpecUrl, version })
 
   if (previewMode) {
     logger.info('Running in preview mode')
@@ -274,22 +268,25 @@ async function run () {
   if (openapiSpecFile !== 'no-openapi-spec-file') {
     logger.info('Reading OpenAPI spec from file:', openapiSpecFile)
     openapiSpec = readOpenAPISpecFromFile(openapiSpecFile)
-    if (openapiSpec) {
-      logger.info('OpenAPI spec loaded:', openapiSpec?.length + ' bytes')
-    } else {
+    if (!openapiSpec) {
       logger.error('Unable to load OpenAPI spec from file - exiting early')
       process.exit(1)
     }
+    logger.info('OpenAPI spec loaded:', openapiSpec?.length + ' bytes')
   }
 
   if (openapiSpecUrl !== 'no-openapi-spec-url') {
     logger.info('Fetching OpenAPI spec from URL:', openapiSpecUrl)
     openapiSpec = await readOpenAPISpecFromUrl(openapiSpecUrl, standardAuthHeaders)
-    if (openapiSpec) {
-      logger.info('OpenAPI spec downloaded:', openapiSpec?.length + ' bytes')
-      logger.info('OpenAPI spec (first 500 chars):\n' + openapiSpec.slice(0, 500))
-    } else {
+    logger.info('Auth Headers used:', standardAuthHeaders)
+    if (!openapiSpec) {
       logger.error('Unable to download OpenAPI spec from URL - exiting early')
+      process.exit(1)
+    }
+    logger.info('OpenAPI spec downloaded:', openapiSpec?.length + ' bytes')
+    logger.info('OpenAPI spec (first 500 chars):\n' + openapiSpec.slice(0, 500))
+    if (openapiSpec.includes('{ "message": "Unauthorized" }')) {
+      logger.error('OpenAPI spec contains unauthorized message - exiting early')
       process.exit(1)
     }
   }
@@ -299,35 +296,29 @@ async function run () {
     process.exit(1)
   }
 
-  // Make a temporary directory
   const templateDir = relativePath('template', __dirname)
   const packageDir = relativePath(packageId, cwd)
   logger.info('Creating temporary directory:', { tmpDir: packageDir })
   await runCommand(`mkdir -p ${packageDir}`)
-  logger.info('Temporary directory created successfully')  
+  logger.info('Temporary directory created successfully')
 
-  // Copy template
   logger.info('Copying template to temporary directory', { templateDir, tmpDir: packageDir })
   await runCommand(`cp -r ${templateDir}/* ${packageDir}`)
   logger.info('Template copied successfully')
 
-  // List folder tree for temporary directory
   logger.info('Contents of package directory')
   await listFilesRelativeToDir(packageDir)
 
-  // Replace OpenAPI spec in template folder
   const openapiSpecFilepath = relativePath('src/client/OpenAPISpec.json', packageDir)
   logger.info('Replacing OpenAPI spec in template folder', { openapiSpecFilepath, tmpDir: packageDir })
   fs.writeFileSync(openapiSpecFilepath, openapiSpec, 'utf8')
   logger.info('OpenAPI spec replaced successfully')
 
-  // Search and replace template-package across all files
   logger.info('Replacing package name in all files')
   await searchAndReplaceInFiles(packageDir, '@connected-web/template-package', packageId)
   await searchAndReplaceInFiles(packageDir, 'connected-web/template-package', sourceRepoId)
   logger.info('Package name replaced successfully', { packageId })
 
-  // Generate markdown from OpenAPI spec - search and replace in README.md
   const markdown = generateMarkDownForOpenAPISpec(openapiSpec, sourceRepoId)
   const markdownFilepath = relativePath('README.md', packageDir)
   logger.info('Replacing markdown in README.md')
@@ -335,60 +326,49 @@ async function run () {
   const newMarkdown = existingMarkdown.replace('{{GENERATED_API_DOCS}}', markdown)
   fs.writeFileSync(markdownFilepath, newMarkdown, 'utf8')
 
-  // Replace version in package.json
   logger.info('Replacing version in package.json')
   const packageJsonFilepath = relativePath('package.json', packageDir)
   const packageJson = JSON.parse(fs.readFileSync(packageJsonFilepath, 'utf8'))
   fs.writeFileSync(packageJsonFilepath, JSON.stringify({ ...packageJson, version }, null, 2), 'utf8')
   logger.info('Version replaced successfully', { version })
 
-  // Install dependencies (consider handing this off to Github Actions)
   logger.info('Installing dependencies')
-  await runCommand(`npm install`, FIVE_MINUTE_TIMEOUT, packageDir)
+  await runCommand('npm install', FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('Dependencies installed successfully')
 
-  // Run generator script
   logger.info('Running generator script')
-  await runCommand(`npm run typegen`, FIVE_MINUTE_TIMEOUT, packageDir)
+  await runCommand('npm run typegen', FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('Generator script completed successfully')
 
-  // Lint generated code
   logger.info('Lint generated code')
-  await runCommand(`npm run lint:fix`, FIVE_MINUTE_TIMEOUT, packageDir)
+  await runCommand('npm run lint:fix', FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('Code linted successfully')
 
-  // Run tests (consider handing this off to Github Actions)
   logger.info('Running tests')
-  await runCommand(`npm run test`, FIVE_MINUTE_TIMEOUT, packageDir)
+  await runCommand('npm run test', FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('Tests passed successfully')
 
-  // Build package (consider handing this off to Github Actions)
   logger.info('Building package')
-  await runCommand(`npm run build`, FIVE_MINUTE_TIMEOUT, packageDir)
+  await runCommand('npm run build', FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('Package built successfully')
-  
-  // Manually copy ApiClientTypes.d.ts to dist folder
+
   const apiClientTypesSrc = relativePath('src/client/ApiClientTypes.d.ts', packageDir)
   const apiClientTypesDest = relativePath('dist/src/client/ApiClientTypes.d.ts', packageDir)
   logger.info('Copying ApiClientTypes.d.ts to dist folder')
   await runCommand(`cp ${apiClientTypesSrc} ${apiClientTypesDest}`, FIVE_MINUTE_TIMEOUT, packageDir)
   logger.info('ApiClientTypes.d.ts copied successfully')
 
-  // List resulting folder tree for dist directory
   logger.info('Contents of dist directory')
   await listFilesRelativeToDir(packageDir)
 
-  // Write outputs for Github Actions
   logger.info('Writing outputs for Github Actions', { packageId, version })
   writeGithubOutput('package-id', packageId)
   writeGithubOutput('published-version', version)
-  
+
   if (previewMode) {
     logger.info('Preview mode completed successfully - package ready for publishing')
-    // Skip publishing in preview mode
     return true
   } else {
-    // Publish package
     logger.info('Publishing package')
     const tagOption = version.indexOf('0.0.0') === 0 ? '--tag dev' : '--tag latest'
     await runCommand(`npm publish ${tagOption}`, FIVE_MINUTE_TIMEOUT, packageDir)
@@ -398,7 +378,7 @@ async function run () {
 }
 
 run()
-  .then((result) => {
+  .then(result => {
     const timeEnd = Date.now()
     if (result === true) {
       logger.log('Action completed', 'Duration:', Number((timeEnd - timeStart) / 1000).toFixed(2), 's')
@@ -406,7 +386,8 @@ run()
       logger.error('Action failed')
       process.exit(1)
     }
-  }).catch((err) => {
+  })
+  .catch(err => {
     logger.error('Action error:', err?.message)
     process.exit(2)
   })

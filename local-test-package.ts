@@ -1,7 +1,7 @@
 import ApiClient, { ApiClientType } from './@connected-web/pnpfos-ci-pipeline-test'
 
 async function getAccessToken(): Promise<string> {
-  return String(process.env.ACCESS_TOKEN)
+  return String(process.env.API_ACCESS_TOKEN)
 }
 
 // Substitute the URL with the actual API URL
