@@ -54,30 +54,6 @@ jobs:
     - name: Test basic template 
       run: npm run test
       working-directory: template
-      
-    # Get OAuth token for accessing OpenAPI spec
-    - name: Get OAuth Token
-      id: get-oauth-token
-      env:
-        OAUTH_IDENTITY_URL: ${{ vars.OAUTH_IDENTITY_URL }}
-        OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
-        OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
-      run: |
-        # ensure base64 output is one line (Linux: -w 0, macOS: tr -d '\n')
-        basic_auth=$(echo -n "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" | base64 -w 0 2>/dev/null || echo -n "$OAUTH_CLIENT_ID:$OAUTH_CLIENT_SECRET" | base64 | tr -d '\n')
-        response=$(curl -s -X POST "$OAUTH_IDENTITY_URL" \
-          -H 'Content-Type: application/x-www-form-urlencoded' \
-          -H "Authorization: Basic $basic_auth" \
-          -d "grant_type=client_credentials&client_id=$OAUTH_CLIENT_ID&scope=app-to-app-connected-web-dev/Github")
-        echo "Response: $response"
-        token=$(echo $response | jq -r '.access_token')
-        if [ "$token" == "null" ] || [ -z "$token" ]; then
-          echo "Failed to get access token"
-          exit 1
-        fi
-        echo "Token: $token"
-        echo "token=$token" >> $GITHUB_OUTPUT
-      shell: bash
 
     # Test example instruction from README
     - name: Determine version
@@ -107,7 +83,6 @@ jobs:
       uses: ./
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        bearer-token: ${{ steps.get-oauth-token.outputs.token }}
         package-id: '@connected-web/pnpfos-ci-pipeline-test'
         openapi-spec-file: 'stubs/SampleOpenAPISpec.json'
         version: ${{ steps.version.outputs.version }}
@@ -119,7 +94,9 @@ jobs:
       uses: ./
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        bearer-token: ${{ steps.get-oauth-token.outputs.token }}
+        client-id: ${{ secrets.OAUTH_CLIENT_ID }}
+        client-secret: ${{ secrets.OAUTH_CLIENT_SECRET }}
+        oauth-token-endpoint: ${{ secrets.OAUTH_IDENTITY_URL }}
         package-id: '@connected-web/pnpfos-ci-pipeline-test-from-url'
         openapi-spec-url: 'https://chasm-api.dev.connected-web.services/openapi'
         version: ${{ steps.version.outputs.version }}

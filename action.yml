@@ -1,10 +1,14 @@
 name: Publish NPM Package from OpenAPI Spec
 description: 'Use an OpenAPI spec to generate and publish an npm package to the GitHub Package Registry'
 inputs:
-  bearer-token:
-    description: 'OAuth bearer token to use for authenticating with OpenAPI endpoints'
   github-token:
     description: 'GitHub token used to publish the package to the registry'
+  client-id:
+    description: 'OAuth client ID used to fetch the OpenAPI spec from a URL'
+  client-secret:
+    description: 'OAuth client secret used to fetch the OpenAPI spec from a URL'
+  oauth-token-endpoint:
+    description: 'OAuth token endpoint used to fetch an access token for fetching the OpenAPI spec from a URL'
   package-id:
     description: 'ID of the package to publish - should explicitly include @connected-web/ prefix otherwise the action will exit early'
   openapi-spec-file:
@@ -53,7 +57,9 @@ runs:
         cat ${{ inputs.package-id }}/package.json
       env:
         NODE_AUTH_TOKEN: ${{ inputs.github-token }}
-        ACCESS_TOKEN: ${{ steps.get-auth.outputs.auth-token }}
+        OAUTH_CLIENT_ID: ${{ inputs.client-id }}
+        OAUTH_CLIENT_SECRET: ${{ inputs.client-secret }}
+        OAUTH_TOKEN_ENDPOINT: ${{ inputs.oauth-token-endpoint }}
         PACKAGE_ID: ${{ inputs.package-id }}
         OPENAPI_SPEC_FILE: ${{ inputs.openapi-spec-file }}
         OPENAPI_SPEC_URL: ${{ inputs.openapi-spec-url }}

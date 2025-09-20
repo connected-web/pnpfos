@@ -41,10 +41,20 @@ The action should support the following inputs:
 - **Description**: GitHub token to use with `npm publish` to publish the package to the GitHub registry
 - **Required**: Yes
 
-### bearer-token
+### client-id
 
-- **Description**: A OAuth bearer token to use for with Open API endpoints that require authentication
-- **Required**: Yes
+- **Description**: OAuth client ID used to fetch the OpenAPI spec from a URL
+- **Required**: Yes if using openapi-spec-url
+
+### client-secret
+
+- **Description**: OAuth client secret used to fetch the OpenAPI spec from a URL
+- **Required**: Yes if using openapi-spec-url
+
+### oauth-token-endpoint
+
+- **Description**: OAuth token endpoint used to fetch an access token for fetching the OpenAPI spec from a URL
+- **Required**: Yes if using openapi-spec-url
 
 ### package-id
 

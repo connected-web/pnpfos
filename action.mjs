@@ -18,6 +18,33 @@ function relativePath (file, cwd) {
   return path.join(cwd, file)
 }
 
+export async function getOAuthToken () {
+  try {
+    const clientId = process.env.OAUTH_CLIENT_ID ?? 'not-set'
+    const clientSecret = process.env.OAUTH_CLIENT_SECRET ?? 'not-set'
+    const oauthTokenEndpoint = process.env.OAUTH_TOKEN_ENDPOINT ?? 'not-set'
+    if (clientId === 'not-set' || clientSecret === 'not-set' || oauthTokenEndpoint === 'not-set') {
+      console.error('OAuth environment variables not set - exiting early')
+      process.exit(1)
+    }
+    // Make a POST request to the OAuth token endpoint with client credentials
+    const requestPayload = [
+      'grant_type=client_credentials',
+      `client_id=${clientId}`
+    ].join('&')
+    const requestHeaders = {
+      accept: 'application/json',
+      'content-type': 'application/x-www-form-urlencoded',
+      authorization: `Basic ${btoa([clientId, clientSecret].join(':'))}`
+    }
+    const tokenResponse = await axios.post(oauthTokenEndpoint, requestPayload, { headers: requestHeaders })
+    return tokenResponse?.data?.access_token ?? 'not-set'
+  } catch (err) {
+    console.error('Error fetching OAuth token:', err?.message)
+    return 'not-set'
+  }
+}
+
 // Spawn a child process
 // Directly log its output
 // Return a promise that resolves when the process exits
@@ -90,11 +117,13 @@ function sanitizeVersion (version) {
   return version.replace(/\//g, '-')
 }
 
-function readParamsFromEnv(env) {
-  const { ACCESS_TOKEN, PACKAGE_ID, OPENAPI_SPEC_FILE, OPENAPI_SPEC_URL, VERSION, PREVIEW_MODE, SOURCE_REPO_ID } = env
-  const accessToken = readWithDefault(ACCESS_TOKEN, 'no-access-token')
+async function readParamsFromEnv(env) {
+  const { PACKAGE_ID, OPENAPI_SPEC_FILE, OPENAPI_SPEC_URL, VERSION, PREVIEW_MODE, SOURCE_REPO_ID } = env
+  let accessToken
+  if (OPENAPI_SPEC_URL && OPENAPI_SPEC_URL !== 'no-openapi-spec-url') {
+    accessToken = await getOAuthToken()
+  }
   return {
-    accessToken,
     packageId: readWithDefault(PACKAGE_ID, 'no-package-id'),
     openapiSpecFile: readWithDefault(OPENAPI_SPEC_FILE, 'no-openapi-spec-file'),
     openapiSpecUrl: readWithDefault(OPENAPI_SPEC_URL, 'no-openapi-spec-url'),
@@ -223,7 +252,7 @@ function generateMarkDownForOpenAPISpec(openApiSpec, sourceRepoId) {
 
 const timeStart = Date.now()
 async function run () {
-  const { accessToken, packageId, openapiSpecFile, openapiSpecUrl, version, previewMode, standardAuthHeaders, sourceRepoId } = readParamsFromEnv(process.env)
+  const { accessToken, packageId, openapiSpecFile, openapiSpecUrl, version, previewMode, standardAuthHeaders, sourceRepoId } = await readParamsFromEnv(process.env)
   logger.log('Running action... with properties:', {
     accessToken: accessToken?.length + ' bytes',
     packageId,
