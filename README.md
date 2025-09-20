@@ -19,18 +19,20 @@ This enables the following CI workflows:
 ## Development roadmap
 
 ### Core features
-- 🤔 A reusable Github Action that...
-- 🚧 Downloads / validate a provided OpenAPISpec
-- 🚧 Generates TypeScript types from the OpenAPISpec
-- 🚧 Fills in the package template
-- 🚧 Uses a standard wrapper for creating a client
-- 🚧 Runs sanity checks against the client, e.g. use OAuth token to access status endpoint
-- 🚧 Publish package using inputs
 
-### Additional tasks
-- 🚧 Document parameters for Github Action in this README
-- 🚧 Create a sample OpenAPISpec.json 
-- 🚧 Create CI pipeline to test reusable action
+- ✅ A reusable Github Action that...
+- ✅ Downloads / validate a provided OpenAPISpec
+- ✅ Generates TypeScript types from the OpenAPISpec
+- ✅ Fills in the package template
+- ✅ Uses a standard wrapper for creating a client
+- ✅ Runs sanity checks against the client, e.g. use OAuth token to access status endpoint
+- ✅ Publish package using inputs
+
+### Additional features
+
+- ✅ Document parameters for Github Action in this README
+- ✅ Create a sample OpenAPISpec.json 
+- ✅ Create CI pipeline to test reusable action
 
 ## Inputs
 
