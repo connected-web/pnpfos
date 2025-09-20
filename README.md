@@ -130,7 +130,9 @@ jobs:
         uses: connected-web/pnpfos@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          bearer-token: ${{ secrets.APPS_COGNITO_BEARER_UAT }}
+          client-id: ${{ secrets.POST_DEPLOYMENT_CLIENT_ID }}
+          client-secret: ${{ secrets.POST_DEPLOYMENT_CLIENT_SECRET }}
+          oauth-token-url: 'https://connected-web-dev.auth.eu-west-2.amazoncognito.com/oauth2/token'
           package-id: '@connected-web/my-api-client'
           # openapi-spec-file: 'src/post-deployment/openapi-spec.json'
           openapi-spec-url: 'https://my-api.dev.connected-web.services/openapi'
