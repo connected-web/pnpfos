@@ -36,13 +36,13 @@ runs:
   using: composite
   steps:
     # Checkout the repo
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0 # needed to checkout all branches for this Action to work
 
     # Set up node
     - name: Use Node JS LTS
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: 22.x
         registry-url: https://npm.pkg.github.com
